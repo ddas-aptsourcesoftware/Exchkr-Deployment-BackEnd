@@ -1,6 +1,5 @@
 package com.exchkr.club.management.services.Impl;
 
-import com.exchkr.club.management.dao.BudgetCategoryMasterRepository;
 import com.exchkr.club.management.dao.ClubBudgetRepository;
 import com.exchkr.club.management.dao.InvoiceDetailRepository;
 import com.exchkr.club.management.dao.InvoiceHeaderRepository;
@@ -11,7 +10,6 @@ import com.exchkr.club.management.dao.TransactionRepository;
 import com.exchkr.club.management.dao.UserClubMembershipProjection;
 import com.exchkr.club.management.dao.UserClubRepository;
 import com.exchkr.club.management.dao.UserRepository;
-import com.exchkr.club.management.model.api.request.BudgetPatchRequest;
 import com.exchkr.club.management.model.api.request.BudgetSetupRequest;
 import com.exchkr.club.management.model.api.request.CreateInvoiceRequest;
 import com.exchkr.club.management.model.api.request.DueReminderRequest;
@@ -25,7 +23,6 @@ import com.exchkr.club.management.model.api.response.ReimbursementListResponse;
 import com.exchkr.club.management.model.dto.FinanceSummaryDTO;
 import com.exchkr.club.management.model.dto.MemberDuesDTO;
 import com.exchkr.club.management.model.entity.BudgetCategory;
-import com.exchkr.club.management.model.entity.BudgetCategoryMaster;
 import com.exchkr.club.management.model.entity.ClubBudget;
 import com.exchkr.club.management.model.entity.ClubTransaction;
 import com.exchkr.club.management.model.entity.InvoiceDetail;
@@ -55,12 +52,10 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.net.MalformedURLException;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -97,14 +92,13 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 	private final UserRepository userRepository;
 	private final UserClubRepository userClubRepository;
 	private final EmailService emailService;
-	private final BudgetCategoryMasterRepository masterRepository;
 	private final ClubBudgetRepository budgetRepository;
 
 	public ClubFinanceServiceImpl(TransactionRepository transactionRepository, MemberDuesRepository duesRepository,
 			ReimbursementRepository reimbursementRepository, InvoiceHeaderRepository headerRepo,
 			InvoiceDetailRepository detailRepo, InvoiceMemberMappingRepository mappingRepo,
 			UserRepository userRepository, UserClubRepository userClubRepository, EmailService emailService,
-			BudgetCategoryMasterRepository masterRepository, ClubBudgetRepository budgetRepository) {
+			ClubBudgetRepository budgetRepository) {
 		this.transactionRepository = transactionRepository;
 		this.duesRepository = duesRepository;
 		this.reimbursementRepository = reimbursementRepository;
@@ -114,7 +108,6 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 		this.userRepository = userRepository;
 		this.userClubRepository = userClubRepository;
 		this.emailService = emailService;
-		this.masterRepository = masterRepository;
 		this.budgetRepository = budgetRepository;
 
 	}
@@ -232,15 +225,8 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 
 	@Override
 	public byte[] generateTransactionPdf(Long officerId, Long clubId, Instant fromDate, Instant toDate) {
-
-		// Convert toDate to the start of the next day to include all transactions on
-		// toDate
-		Instant toDatePlusOne = toDate.atZone(ZoneId.systemDefault()).toLocalDate().plusDays(1)
-				.atStartOfDay(ZoneId.systemDefault()).toInstant();
-
-		// Fetch transactions
-		List<ClubTransaction> transactions = transactionRepository.findTransactionsByDateRangeInclusive(clubId,
-				fromDate, toDatePlusOne);
+		List<ClubTransaction> transactions = transactionRepository.findTransactionsByDateRange(clubId, fromDate,
+				toDate);
 
 		String clubName = userClubRepository.findMembershipDetail(officerId, clubId)
 				.map(UserClubMembershipProjection::getClubName).orElse("Exchkr Club");
@@ -252,17 +238,18 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 			PdfWriter.getInstance(document, out);
 			document.open();
 
-			// Fonts
+			// 1. Fonts
 			Font fontTitle = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
 			Font fontClubName = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12);
 			Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11);
 			Font rowFont = FontFactory.getFont(FontFactory.HELVETICA, 10);
 
-			// Header Table
+			// 2. Header Table (Logo on left, Title on right)
 			PdfPTable headerTable = new PdfPTable(2);
 			headerTable.setWidthPercentage(100);
 			headerTable.setSpacingAfter(10f);
 
+			// Left Side: Logo or Club Name
 			PdfPCell leftCell = new PdfPCell();
 			leftCell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
 			try {
@@ -280,6 +267,7 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 			}
 			headerTable.addCell(leftCell);
 
+			// Right Side: Title
 			PdfPCell rightCell = new PdfPCell(new Phrase("Transaction Report", fontTitle));
 			rightCell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
 			rightCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
@@ -288,7 +276,7 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 
 			document.add(headerTable);
 
-			// Period / Subtitle
+			// 3. Period / Subtitle
 			DateTimeFormatter displayFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 					.withZone(ZoneId.systemDefault());
 			Paragraph period = new Paragraph(
@@ -297,10 +285,11 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 			document.add(period);
 			document.add(new Paragraph(" ")); // Spacer
 
-			// Main Transaction Table
+			// 4. Main Transaction Table
 			PdfPTable table = new PdfPTable(new float[] { 15, 30, 15, 12, 13, 15 });
 			table.setWidthPercentage(100);
 
+			// Table Headers
 			String[] headers = { "Date", "Description", "Category", "Type", "Amount", "Status" };
 			for (String header : headers) {
 				PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
@@ -320,7 +309,8 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 				typeCell.setHorizontalAlignment(Element.ALIGN_CENTER);
 				table.addCell(typeCell);
 
-				String amt = t.getAmount() != null ? "$" + t.getAmount().setScale(2, RoundingMode.HALF_UP) : "$0.00";
+				String amt = t.getAmount() != null ? "$" + t.getAmount().setScale(2, RoundingMode.HALF_UP).toString()
+						: "$0.00";
 				PdfPCell amtCell = new PdfPCell(new Phrase(amt, rowFont));
 				amtCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
 				table.addCell(amtCell);
@@ -400,209 +390,180 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 		// 5. Return as Spring Data Page
 		return new PageImpl<>(dtoList, pageable, totalCount);
 	}
-
+	
+	
 	@Override
-	public List<MemberDuesDTO> getDuesByStatus(Long clubId, String status) {
-		// Fetch raw rows from repository
-		List<Map<String, Object>> rawRows = duesRepository.fetchDuesByStatusRaw(clubId, status);
-
-		return rawRows.stream().map(row -> mapToMemberDuesDTO(row)).toList();
-	}
+    public List<MemberDuesDTO> getDuesByStatus(Long clubId, String status) {
+        // Fetch raw rows from repository 
+        List<Map<String, Object>> rawRows = duesRepository.fetchDuesByStatusRaw(clubId, status);
+        
+        return rawRows.stream().map(row -> mapToMemberDuesDTO(row)).toList();
+    }
 
 	@Override
 	public byte[] generateDuesPdf(Long officerId, Long clubId, String status) {
-		// 1. Fetch Data
-		List<MemberDuesDTO> duesList;
-		if ("All".equalsIgnoreCase(status)) {
-			duesList = getPagedDues(clubId, 0, Integer.MAX_VALUE).getContent();
-		} else {
-			duesList = getDuesByStatus(clubId, status);
-		}
+	    // 1. Fetch Data
+	    List<MemberDuesDTO> duesList;
+	    if ("All".equalsIgnoreCase(status)) {
+	        duesList = getPagedDues(clubId, 0, Integer.MAX_VALUE).getContent();
+	    } else {
+	        duesList = getDuesByStatus(clubId, status);
+	    }
 
-		// 2. Fetch Club Name
-		String clubName = userClubRepository.findMembershipDetail(officerId, clubId)
+	    // 2. Fetch Club Name 
+	    String clubName = userClubRepository.findMembershipDetail(officerId, clubId)
 				.map(UserClubMembershipProjection::getClubName).orElse("Exchkr Club");
+	    
+	    ByteArrayOutputStream out = new ByteArrayOutputStream();
+	    Document document = new Document(PageSize.A4);
 
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		Document document = new Document(PageSize.A4);
+	    try {
+	        PdfWriter.getInstance(document, out);
+	        document.open();
 
-		try {
-			PdfWriter.getInstance(document, out);
-			document.open();
+	        // Fonts
+	        Font fontTitle = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
+	        Font fontClubName = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12);
+	        Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11);
+	        Font rowFont = FontFactory.getFont(FontFactory.HELVETICA, 10);
 
-			// Fonts
-			Font fontTitle = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
-			Font fontClubName = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12);
-			Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11);
-			Font rowFont = FontFactory.getFont(FontFactory.HELVETICA, 10);
+	        // --- HEADER SECTION (Logo & Title) ---
+	        PdfPTable headerTable = new PdfPTable(2);
+	        headerTable.setWidthPercentage(100);
+	        headerTable.setSpacingAfter(10f);
 
-			// --- HEADER SECTION (Logo & Title) ---
-			PdfPTable headerTable = new PdfPTable(2);
-			headerTable.setWidthPercentage(100);
-			headerTable.setSpacingAfter(10f);
+	        // Left Side: Logo or Club Name
+	        PdfPCell leftCell = new PdfPCell();
+	        leftCell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
+	        try {
+	            java.io.InputStream is = getClass().getResourceAsStream("/static/images/EXCHKR.png");
+	            if (is != null) {
+	                com.lowagie.text.Image logo = com.lowagie.text.Image.getInstance(is.readAllBytes());
+	                logo.scaleToFit(100, 50);
+	                leftCell.addElement(logo);
+	            } else {
+	                leftCell.addElement(new Paragraph(clubName, fontClubName));
+	            }
+	        } catch (Exception e) {
+	            logger.warn("Could not load logo for Dues PDF. Using club name text.");
+	            leftCell.addElement(new Paragraph(clubName, fontClubName));
+	        }
+	        headerTable.addCell(leftCell);
 
-			// Left Side: Logo or Club Name
-			PdfPCell leftCell = new PdfPCell();
-			leftCell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
-			try {
-				java.io.InputStream is = getClass().getResourceAsStream("/static/images/EXCHKR.png");
-				if (is != null) {
-					com.lowagie.text.Image logo = com.lowagie.text.Image.getInstance(is.readAllBytes());
-					logo.scaleToFit(100, 50);
-					leftCell.addElement(logo);
-				} else {
-					leftCell.addElement(new Paragraph(clubName, fontClubName));
-				}
-			} catch (Exception e) {
-				logger.warn("Could not load logo for Dues PDF. Using club name text.");
-				leftCell.addElement(new Paragraph(clubName, fontClubName));
-			}
-			headerTable.addCell(leftCell);
+	        // Right Side: Title
+	        PdfPCell rightCell = new PdfPCell(new Phrase("Member Dues Report", fontTitle));
+	        rightCell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
+	        rightCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+	        rightCell.setVerticalAlignment(Element.ALIGN_BOTTOM);
+	        headerTable.addCell(rightCell);
 
-			// Right Side: Title
-			PdfPCell rightCell = new PdfPCell(new Phrase("Member Dues Report", fontTitle));
-			rightCell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
-			rightCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-			rightCell.setVerticalAlignment(Element.ALIGN_BOTTOM);
-			headerTable.addCell(rightCell);
+	        document.add(headerTable);
 
-			document.add(headerTable);
+	        // Report Metadata (Filter Status and Date)
+	        Paragraph info = new Paragraph("Status Filter: " + status + " | Date: " + java.time.LocalDate.now());
+	        info.setAlignment(Element.ALIGN_RIGHT);
+	        document.add(info);
+	        document.add(new Paragraph(" ")); // Spacer
 
-			// Report Metadata (Filter Status and Date)
-			Paragraph info = new Paragraph("Status Filter: " + status + " | Date: " + java.time.LocalDate.now());
-			info.setAlignment(Element.ALIGN_RIGHT);
-			document.add(info);
-			document.add(new Paragraph(" ")); // Spacer
+	        // --- MAIN TABLE ---
+	        PdfPTable table = new PdfPTable(new float[] { 25, 30, 15, 15, 15 });
+	        table.setWidthPercentage(100);
 
-			// --- MAIN TABLE ---
-			PdfPTable table = new PdfPTable(new float[] { 25, 30, 15, 15, 15 });
-			table.setWidthPercentage(100);
+	        String[] headers = { "Member", "Email", "Paid", "Owed", "Status" };
+	        for (String h : headers) {
+	            PdfPCell cell = new PdfPCell(new Phrase(h, headerFont));
+	            cell.setBackgroundColor(java.awt.Color.LIGHT_GRAY);
+	            cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+	            cell.setPadding(5);
+	            table.addCell(cell);
+	        }
 
-			String[] headers = { "Member", "Email", "Paid", "Owed", "Status" };
-			for (String h : headers) {
-				PdfPCell cell = new PdfPCell(new Phrase(h, headerFont));
-				cell.setBackgroundColor(java.awt.Color.LIGHT_GRAY);
-				cell.setHorizontalAlignment(Element.ALIGN_CENTER);
-				cell.setPadding(5);
-				table.addCell(cell);
-			}
+	        BigDecimal totalOwed = BigDecimal.ZERO;
 
-			BigDecimal totalOwed = BigDecimal.ZERO;
+	        for (MemberDuesDTO due : duesList) {
+	            table.addCell(new Phrase(due.getFullName(), rowFont));
+	            table.addCell(new Phrase(due.getEmail(), rowFont));
+	            
+	            PdfPCell paid = new PdfPCell(new Phrase("$" + due.getAmountPaid().setScale(2, RoundingMode.HALF_UP), rowFont));
+	            paid.setHorizontalAlignment(Element.ALIGN_RIGHT);
+	            table.addCell(paid);
 
-			for (MemberDuesDTO due : duesList) {
-				table.addCell(new Phrase(due.getFullName(), rowFont));
-				table.addCell(new Phrase(due.getEmail(), rowFont));
+	            PdfPCell owed = new PdfPCell(new Phrase("$" + due.getAmountOwed().setScale(2, RoundingMode.HALF_UP), rowFont));
+	            owed.setHorizontalAlignment(Element.ALIGN_RIGHT);
+	            table.addCell(owed);
 
-				PdfPCell paid = new PdfPCell(
-						new Phrase("$" + due.getAmountPaid().setScale(2, RoundingMode.HALF_UP), rowFont));
-				paid.setHorizontalAlignment(Element.ALIGN_RIGHT);
-				table.addCell(paid);
+	            PdfPCell stat = new PdfPCell(new Phrase(due.getStatus(), rowFont));
+	            stat.setHorizontalAlignment(Element.ALIGN_CENTER);
+	            table.addCell(stat);
 
-				PdfPCell owed = new PdfPCell(
-						new Phrase("$" + due.getAmountOwed().setScale(2, RoundingMode.HALF_UP), rowFont));
-				owed.setHorizontalAlignment(Element.ALIGN_RIGHT);
-				table.addCell(owed);
+	            totalOwed = totalOwed.add(due.getAmountOwed());
+	        }
 
-				PdfPCell stat = new PdfPCell(new Phrase(due.getStatus(), rowFont));
-				stat.setHorizontalAlignment(Element.ALIGN_CENTER);
-				table.addCell(stat);
+	        document.add(table);
 
-				totalOwed = totalOwed.add(due.getAmountOwed());
-			}
+	        // --- SUMMARY FOOTER ---
+	        Paragraph summary = new Paragraph("\nTotal Outstanding for this view: $" + totalOwed.setScale(2, RoundingMode.HALF_UP));
+	        summary.setAlignment(Element.ALIGN_RIGHT);
+	        document.add(summary);
 
-			document.add(table);
-
-			// --- SUMMARY FOOTER ---
-			Paragraph summary = new Paragraph(
-					"\nTotal Outstanding for this view: $" + totalOwed.setScale(2, RoundingMode.HALF_UP));
-			summary.setAlignment(Element.ALIGN_RIGHT);
-			document.add(summary);
-
-			document.close();
-		} catch (Exception e) {
-			logger.error("Error generating Dues PDF: {}", e.getMessage());
-			throw new RuntimeException("Failed to generate Dues PDF report");
-		}
-		return out.toByteArray();
+	        document.close();
+	    } catch (Exception e) {
+	        logger.error("Error generating Dues PDF: {}", e.getMessage());
+	        throw new RuntimeException("Failed to generate Dues PDF report");
+	    }
+	    return out.toByteArray();
 	}
 
-	/**
-	 * Helper to map raw SQL Map to MemberDuesDTO
-	 */
-	private MemberDuesDTO mapToMemberDuesDTO(Map<String, Object> row) {
-		MemberDuesDTO dto = new MemberDuesDTO();
-		dto.setFullName((String) row.get("fullName"));
-		dto.setEmail((String) row.get("email"));
-		dto.setStatus((String) row.get("status"));
+    /**
+     * Helper to map raw SQL Map to MemberDuesDTO
+     */
+    private MemberDuesDTO mapToMemberDuesDTO(Map<String, Object> row) {
+        MemberDuesDTO dto = new MemberDuesDTO();
+        dto.setFullName((String) row.get("fullName"));
+        dto.setEmail((String) row.get("email"));
+        dto.setStatus((String) row.get("status"));
+        
+        dto.setAmountPaid(row.get("paidAmount") != null ? 
+            new BigDecimal(row.get("paidAmount").toString()) : BigDecimal.ZERO);
+            
+        dto.setAmountOwed(row.get("remainingAmount") != null ? 
+            new BigDecimal(row.get("remainingAmount").toString()) : BigDecimal.ZERO);
 
-		dto.setAmountPaid(
-				row.get("paidAmount") != null ? new BigDecimal(row.get("paidAmount").toString()) : BigDecimal.ZERO);
+        dto.setDueId(row.get("dueId") != null ? ((Number) row.get("dueId")).longValue() : null);
+        dto.setMemberId(row.get("assignedUserId") != null ? ((Number) row.get("assignedUserId")).longValue() : null);
 
-		dto.setAmountOwed(row.get("remainingAmount") != null ? new BigDecimal(row.get("remainingAmount").toString())
-				: BigDecimal.ZERO);
-
-		dto.setDueId(row.get("dueId") != null ? ((Number) row.get("dueId")).longValue() : null);
-		dto.setMemberId(row.get("assignedUserId") != null ? ((Number) row.get("assignedUserId")).longValue() : null);
-
-		// Handle Date
-		Object dateObj = row.get("lastPaymentDate");
-		if (dateObj instanceof java.sql.Timestamp ts)
-			dto.setLastPaymentDate(ts.toInstant());
-
-		return dto;
-	}
+        // Handle Date
+        Object dateObj = row.get("lastPaymentDate");
+        if (dateObj instanceof java.sql.Timestamp ts) dto.setLastPaymentDate(ts.toInstant());
+        
+        return dto;
+    }
 
 	@Override
 	public Map<String, Object> getDuesSummaryMetrics(Long clubId) {
 		Map<String, Object> metrics = duesRepository.getDuesSummaryMetrics(clubId);
 
-		if (metrics == null || metrics.isEmpty()) {
+		// Safety check: if database returns null for any reason, return zeros
+		if (metrics == null) {
 			metrics = new HashMap<>();
 			metrics.put("duesCollected", 0);
 			metrics.put("paidInFull", 0);
 			metrics.put("needReminder", 0);
-			metrics.put("collectionRate", 0.00);
 		}
 
 		return metrics;
 	}
 
-	private OffsetDateTime[] getCurrentSemesterRange() {
-		int month = java.time.LocalDate.now().getMonthValue();
-		int year = java.time.LocalDate.now().getYear();
-
-		OffsetDateTime start;
-		OffsetDateTime end;
-
-		// Define semesters: Spring (Jan-May), Fall (Aug-Dec)
-		if (month >= 1 && month <= 5) {
-			start = OffsetDateTime.of(year, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
-			end = OffsetDateTime.of(year, 5, 31, 23, 59, 59, 999000000, ZoneOffset.UTC);
-		} else if (month >= 8 && month <= 12) {
-			start = OffsetDateTime.of(year, 8, 1, 0, 0, 0, 0, ZoneOffset.UTC);
-			end = OffsetDateTime.of(year, 12, 31, 23, 59, 59, 999000000, ZoneOffset.UTC);
-		} else {
-			// Summer/Winter Gap fallback
-			start = OffsetDateTime.of(year, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
-			end = OffsetDateTime.now(ZoneOffset.UTC);
-		}
-
-		return new OffsetDateTime[] { start, end };
-	}
-
 	@Override
 	public FinanceSummaryDTO getFinanceSummary(Long clubId) {
-		OffsetDateTime[] odtRange = getCurrentSemesterRange();
+		// 1. Get Total Income (Type: Income)
+		BigDecimal totalIncome = transactionRepository.sumAmountByClubAndType(clubId, "Income");
 
-		// Total Income & Expenses (Only 'Completed')
-		BigDecimal totalIncome = transactionRepository.sumAmountByClubAndTypeAndDate(clubId, "Income",
-				odtRange[0].toInstant(), odtRange[1].toInstant());
+		// 2. Get Total Expenses (Type: Expense)
+		BigDecimal totalExpenses = transactionRepository.sumAmountByClubAndType(clubId, "Expense");
 
-		BigDecimal totalExpenses = transactionRepository.sumAmountByClubAndTypeAndDate(clubId, "Expense",
-				odtRange[0].toInstant(), odtRange[1].toInstant());
-
-		// Pending Count (Includes PENDING and PROCESSING)
-		long pendingCount = reimbursementRepository.countPendingReimbursementsByDate(clubId, odtRange[0], odtRange[1]);
+		// 3. Get Pending Reimbursement count
+		long pendingCount = reimbursementRepository.countPendingReimbursements(clubId);
 
 		return new FinanceSummaryDTO(totalIncome != null ? totalIncome : BigDecimal.ZERO,
 				totalExpenses != null ? totalExpenses : BigDecimal.ZERO, pendingCount);
@@ -1153,36 +1114,32 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 
 	@Override
 	public List<CategorySpendingResponse> getSpendingByCategory(Long clubId) {
+		// 1. Fetch aggregated raw sums
 		List<Map<String, Object>> rawData = transactionRepository.getSpendingByCategoryRaw(clubId);
 
-		String[] colorPalette = { "#6366F1", "#10B981", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#EC4899",
-				"#06B6D4", "#F97316" };
-
+		// 2. Calculate Grand Total for the denominator
 		java.math.BigDecimal grandTotal = rawData.stream()
 				.map(row -> row.get("value") != null ? new java.math.BigDecimal(row.get("value").toString())
 						: java.math.BigDecimal.ZERO)
 				.reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
 
+		// 3. Handle edge case for zero spending
 		if (grandTotal.compareTo(java.math.BigDecimal.ZERO) <= 0) {
 			return java.util.Collections.emptyList();
 		}
 
-		List<CategorySpendingResponse> response = new ArrayList<>();
-		for (int i = 0; i < rawData.size(); i++) {
-			Map<String, Object> row = rawData.get(i);
+		// 4. Map to DTO with only percentage, name, and color
+		return rawData.stream().map(row -> {
 			java.math.BigDecimal categorySum = row.get("value") != null
 					? new java.math.BigDecimal(row.get("value").toString())
 					: java.math.BigDecimal.ZERO;
 
+			// Calculate percentage: (Category / Total) * 100
 			double percentage = categorySum.divide(grandTotal, 4, java.math.RoundingMode.HALF_UP)
 					.multiply(java.math.BigDecimal.valueOf(100)).doubleValue();
 
-			String categoryName = (String) row.get("name");
-			String color = colorPalette[i % colorPalette.length];
-
-			response.add(new CategorySpendingResponse(categoryName, percentage, color));
-		}
-		return response;
+			return new CategorySpendingResponse((String) row.get("name"), percentage, (String) row.get("color"));
+		}).collect(java.util.stream.Collectors.toList());
 	}
 
 	@Override
@@ -1198,239 +1155,89 @@ public class ClubFinanceServiceImpl implements ClubFinanceService {
 
 	@Override
 	@Transactional
-	public void saveMasterCategories(Long clubId, List<String> categoryNames) {
-		if (categoryNames == null || categoryNames.isEmpty()) {
-			return;
-		}
-
-		// 1. Clean the list: trim, remove empty, and handle case-insensitive duplicates
-		// in the input
-		List<String> cleanedNames = categoryNames.stream().map(String::trim).filter(name -> !name.isEmpty()).distinct()
-				.toList();
-
-		// 2. Filter out names that already exist in the database for this club
-		List<BudgetCategoryMaster> toSave = cleanedNames.stream()
-				.filter(name -> !masterRepository.existsByClubIdAndCategoryNameIgnoreCase(clubId, name)).map(name -> {
-					BudgetCategoryMaster master = new BudgetCategoryMaster();
-					master.setClubId(clubId);
-					master.setCategoryName(name);
-					return master;
-				}).collect(Collectors.toList());
-
-		// 3. Bulk save
-		if (!toSave.isEmpty()) {
-			masterRepository.saveAll(toSave);
-		}
-	}
-
-	@Override
-	@Transactional(readOnly = true)
-	public List<BudgetCategoryMaster> getBudgetCategoryMasterList(Long clubId) {
-		return masterRepository.findByClubIdOrderByCategoryNameAsc(clubId);
-	}
-
-	@Override
-	@Transactional
 	public void saveBudget(Long clubId, BudgetSetupRequest request, Long userId) {
 		int currentYear = java.time.LocalDate.now().getYear();
 
-		boolean alreadyExists = budgetRepository.existsByClubIdAndFiscalYearAndActiveInd(clubId, currentYear, 1);
-		if (alreadyExists) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT,
-					"A budget for " + currentYear + " has already been established.");
-		}
+	    // Check if a budget already exists for this year
+	    boolean alreadyExists = budgetRepository.existsByClubIdAndFiscalYearAndActiveInd(clubId, currentYear, 1);
 
-		// 1. Create the Budget Header
+	    if (alreadyExists) {
+	        throw new ResponseStatusException(HttpStatus.CONFLICT, 
+	            "A budget for " + currentYear + " has already been established for this club.");
+	    }
+	    
+		// 1. Create the Header
 		ClubBudget budget = new ClubBudget();
 		budget.setClubId(clubId);
-		budget.setTotalBudget(request.getTotalBudget());
+		budget.setTotalBudget(BigDecimal.valueOf(request.getTotalBudget()));
 		budget.setCreatedBy(userId);
-		budget.setFiscalYear(currentYear);
+		budget.setFiscalYear(java.time.LocalDate.now().getYear());
 		budget.setActiveInd(1);
 
-		// 2. Map the categories (with Create-on-the-fly logic)
+		// 2. Map the categories from the DTO to the Entity
 		if (request.getCategories() != null) {
 			for (BudgetSetupRequest.CategoryAllocationDTO catDto : request.getCategories()) {
-				BudgetCategoryMaster master;
+				BudgetCategory category = new BudgetCategory();
+				category.setCategoryName(catDto.getCategoryName());
+				category.setTotalBudgeted(BigDecimal.valueOf(catDto.getTotalBudgeted()));
+				category.setTotalSpent(BigDecimal.ZERO); // Initial state
 
-				if (catDto.getCategoryId() == null) {
-					// BRAND NEW CATEGORY
-					// Ensure the name isn't empty
-					if (catDto.getCategoryName() == null || catDto.getCategoryName().trim().isEmpty()) {
-						throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-								"Category name is required for new categories.");
-					}
-
-					master = new BudgetCategoryMaster();
-					master.setCategoryName(catDto.getCategoryName().trim());
-					master.setClubId(clubId);
-					// Save it to the master table first to generate an ID
-					master = masterRepository.save(master);
-				} else {
-					// EXISTING CATEGORY
-					master = masterRepository.findById(catDto.getCategoryId())
-							.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-									"Category ID " + catDto.getCategoryId() + " not found."));
-
-					// Security check
-					if (!master.getClubId().equals(clubId)) {
-						throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized category access.");
-					}
-				}
-
-				// 3. Create the budget allocation link
-				BudgetCategory allocation = new BudgetCategory();
-				allocation.setCategoryMaster(master);
-				allocation.setTotalBudgeted(catDto.getTotalBudgeted());
-				allocation.setTotalSpent(BigDecimal.ZERO);
-
-				budget.addCategory(allocation);
+				// This helper handles the bidirectional relationship
+				budget.addCategory(category);
 			}
 		}
 
+		// 3. Save everything (CascadeType.ALL handles the categories)
 		budgetRepository.save(budget);
-	}
-
-	@Override
-	@Transactional
-	public void patchBudget(Long clubId, BudgetPatchRequest request, Long userId) {
-		int currentYear = java.time.LocalDate.now().getYear();
-
-		// 1. Find existing budget
-		ClubBudget budget = budgetRepository.findByClubIdAndFiscalYearAndActiveInd(clubId, currentYear, 1)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-						"No active budget found for the current year."));
-
-		BigDecimal limit = (request.getTotalBudget() != null) ? request.getTotalBudget() : budget.getTotalBudget();
-
-		// 2. Perform Updates and track processed IDs for removal sync
-		if (request.getCategoryUpdates() != null) {
-			// We use this set to identify which allocations the user wants to KEEP
-			Set<Long> processedMasterIds = new java.util.HashSet<>();
-
-			for (BudgetPatchRequest.CategoryPatchDTO updateDto : request.getCategoryUpdates()) {
-				BudgetCategoryMaster master;
-
-				// Handle Master Category Identification (Existing or New)
-				if (updateDto.getCategoryId() == null) {
-					if (updateDto.getCategoryName() == null || updateDto.getCategoryName().isBlank()) {
-						throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-								"Category ID or Name must be provided.");
-					}
-
-					// Prevent duplicate master entries by checking name (case-insensitive)
-					master = masterRepository.findByClubIdAndCategoryNameIgnoreCase(clubId, updateDto.getCategoryName())
-							.orElseGet(() -> {
-								BudgetCategoryMaster newMaster = new BudgetCategoryMaster();
-								newMaster.setClubId(clubId);
-								newMaster.setCategoryName(updateDto.getCategoryName().trim());
-								return masterRepository.save(newMaster);
-							});
-				} else {
-					master = masterRepository.findById(updateDto.getCategoryId())
-							.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-									"Master Category not found for ID: " + updateDto.getCategoryId()));
-				}
-
-				// Track this ID
-				processedMasterIds.add(master.getCategoryId());
-
-				// Update existing or add new allocation
-				Optional<BudgetCategory> existingAllocation = budget.getCategories().stream()
-						.filter(c -> c.getCategoryMaster().getCategoryId().equals(master.getCategoryId())).findFirst();
-
-				if (existingAllocation.isPresent()) {
-					existingAllocation.get().setTotalBudgeted(updateDto.getTotalBudgeted());
-				} else {
-					BudgetCategory newAllocation = new BudgetCategory();
-					newAllocation.setCategoryMaster(master);
-					newAllocation.setTotalBudgeted(updateDto.getTotalBudgeted());
-					newAllocation.setTotalSpent(BigDecimal.ZERO);
-					budget.addCategory(newAllocation);
-				}
-			}
-
-			// SYNC REMOVALS: If a category is in the DB but NOT in the request, remove it
-			budget.getCategories().removeIf(
-					allocation -> !processedMasterIds.contains(allocation.getCategoryMaster().getCategoryId()));
-		}
-
-		// 3. VALIDATION: Check if sum of all category allocations exceeds the limit
-		BigDecimal sumOfCategories = budget.getCategories().stream().map(BudgetCategory::getTotalBudgeted)
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
-
-		if (sumOfCategories.compareTo(limit) > 0) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					String.format("Total allocation (%s) exceeds the total budget (%s)", sumOfCategories, limit));
-		}
-
-		// 4. Update Header and Save
-		if (request.getTotalBudget() != null) {
-			budget.setTotalBudget(request.getTotalBudget());
-		}
-
-		budgetRepository.save(budget);
+		logger.info("Annual budget of {} saved for club ID: {}", budget.getTotalBudget(), clubId);
 	}
 
 	@Override
 	public BudgetSummaryResponse getBudgetSummary(Long clubId) {
+		// 1. Fetch the active budget for the current year
 		int currentYear = java.time.LocalDate.now().getYear();
-		ClubBudget budget = budgetRepository.findByClubIdAndFiscalYearAndActiveInd(clubId, currentYear, 1)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active budget found"));
+		ClubBudget budget = budgetRepository.findByClubIdAndFiscalYearAndActiveInd(clubId, currentYear, 1).orElseThrow(
+				() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active budget found for this year"));
 
 		BudgetSummaryResponse response = new BudgetSummaryResponse();
 		response.setBudgetId(budget.getBudgetId());
 		response.setFiscalYear(budget.getFiscalYear());
 		response.setTotalAnnualBudget(budget.getTotalBudget());
 
+		// 2. Process Categories and calculate aggregates
 		BigDecimal totalAllocated = BigDecimal.ZERO;
-		BigDecimal totalActualSpent = BigDecimal.ZERO;
+		BigDecimal totalSpent = BigDecimal.ZERO;
 		List<BudgetSummaryResponse.CategoryDetail> details = new ArrayList<>();
 
 		for (BudgetCategory cat : budget.getCategories()) {
 			BudgetSummaryResponse.CategoryDetail detail = new BudgetSummaryResponse.CategoryDetail();
-			String categoryName = (cat.getCategoryMaster() != null) ? cat.getCategoryMaster().getCategoryName()
-					: "Unknown";
-
-			detail.setCategoryName(categoryName);
+			detail.setCategoryName(cat.getCategoryName());
 			detail.setBudgeted(cat.getTotalBudgeted());
+			detail.setSpent(cat.getTotalSpent());
 
-			// A. Get Manual/Direct Expenses (StripeRefId IS NULL)
-			BigDecimal directSpent = transactionRepository.sumDirectExpensesOnly(clubId, categoryName);
-			if (directSpent == null)
-				directSpent = BigDecimal.ZERO;
+			// Calculate remaining for this specific category
+			detail.setRemaining(cat.getTotalBudgeted().subtract(cat.getTotalSpent()));
 
-			// B. Get Reimbursement Payouts (Joined on StripeRefId)
-			// We look at Transaction status 'Completed' to avoid the race condition issue
-			BigDecimal reimbursementSpent = transactionRepository.sumValidatedReimbursementExpenses(clubId,
-					categoryName);
-			if (reimbursementSpent == null)
-				reimbursementSpent = BigDecimal.ZERO;
-
-			// C. Combine for accurate category total
-			BigDecimal actualCategorySpent = directSpent.add(reimbursementSpent);
-
-			detail.setSpent(actualCategorySpent);
-			detail.setRemaining(cat.getTotalBudgeted().subtract(actualCategorySpent));
-
-			// D. Percentage Math
+			// Calculate percentage for progress bars (avoid division by zero)
 			if (cat.getTotalBudgeted().compareTo(BigDecimal.ZERO) > 0) {
-				BigDecimal percentage = actualCategorySpent.multiply(new BigDecimal("100"))
-						.divide(cat.getTotalBudgeted(), 2, java.math.RoundingMode.HALF_UP);
-				detail.setPercentageUsed(Math.min(percentage.doubleValue(), 100.0));
+				double percent = cat.getTotalSpent().doubleValue() / cat.getTotalBudgeted().doubleValue() * 100;
+				detail.setPercentageUsed(Math.min(percent, 100.0)); // Cap at 100%
 			} else {
 				detail.setPercentageUsed(0.0);
 			}
 
 			details.add(detail);
+
+			// Accumulate totals
 			totalAllocated = totalAllocated.add(cat.getTotalBudgeted());
-			totalActualSpent = totalActualSpent.add(actualCategorySpent);
+			totalSpent = totalSpent.add(cat.getTotalSpent());
 		}
 
+		// 3. Set final aggregate values
 		response.setCategories(details);
 		response.setTotalAllocated(totalAllocated);
-		response.setTotalSpent(totalActualSpent);
-		response.setRemainingAmount(budget.getTotalBudget().subtract(totalActualSpent));
+		response.setTotalSpent(totalSpent);
+		response.setRemainingAmount(budget.getTotalBudget().subtract(totalSpent));
 
 		return response;
 	}

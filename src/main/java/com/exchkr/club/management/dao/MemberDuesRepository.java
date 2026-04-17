@@ -44,19 +44,13 @@ public interface MemberDuesRepository extends JpaRepository<MemberDue, Long> {
 	long countDuesByClub(@Param("clubId") Long clubId);
 
 	@Query(value = """
-	        SELECT
-	            CAST(COALESCE(SUM(paid_amount), 0) AS NUMERIC) as "duesCollected",
-	            CAST(COUNT(*) FILTER (WHERE total_amount - paid_amount <= 0) AS INTEGER) as "paidInFull",
-	            CAST(COUNT(*) FILTER (WHERE status = 'Unpaid' AND (total_amount - paid_amount) > 0) AS INTEGER) as "needReminder",
-	            CAST(
-	                CASE 
-	                    WHEN COUNT(*) = 0 THEN 0 
-	                    ELSE (COUNT(*) FILTER (WHERE total_amount - paid_amount <= 0) * 100.0 / COUNT(*)) 
-	                END AS NUMERIC(5,2)
-	            ) as "collectionRate"
-	        FROM ecm_member_dues
-	        WHERE club_id = :clubId
-	        """, nativeQuery = true)
+			SELECT
+			    CAST(COALESCE(SUM(paid_amount), 0) AS NUMERIC) as "duesCollected",
+			    CAST(COUNT(*) FILTER (WHERE total_amount - paid_amount <= 0) AS INTEGER) as "paidInFull",
+			    CAST(COUNT(*) FILTER (WHERE status = 'Unpaid' AND (total_amount - paid_amount) > 0) AS INTEGER) as "needReminder"
+			FROM ecm_member_dues
+			WHERE club_id = :clubId
+			""", nativeQuery = true)
 	Map<String, Object> getDuesSummaryMetrics(@Param("clubId") Long clubId);
 
 	@Query(value = """

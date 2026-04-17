@@ -68,7 +68,8 @@ public class SecurityConfig {
 						// Ignore CSRF for login/refresh so they work without a token initially
 						.ignoringRequestMatchers("/auth/**", "/auth/refresh-token", "/auth/logout",
 								"/api/admin/onboarding/**", "/api/finance/stripe-webhook", "/webhook/stripe/account/**",
-								"/webhook/stripe/payment/**", "/api/webhook/plaid/**", "/api/donation/**", "/api/password/**"))
+								"/webhook/stripe/payment/**", "/api/webhook/plaid/**", 								"/api/donation/**", "/api/unit/applications/**",
+								"/webhook/unit/**"))
 
 				// 3. Stateless Session
 				.sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -78,9 +79,10 @@ public class SecurityConfig {
 
 				// 5. Authorization Rules
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/auth/**", "/auth/refresh-token", "/api/password/**", "/api/admin/onboarding/**",
+						.requestMatchers("/auth/**", "/auth/refresh-token", "/api/admin/onboarding/**",
 								"/api/finance/stripe-webhook", "/error", "/webhook/stripe/account/**",
-								"/webhook/stripe/payment/**", "/api/webhook/plaid/**", "/api/donation/**")
+								"/webhook/stripe/payment/**", "/api/webhook/plaid/**", "/api/donation/**",
+								"/api/unit/identity", "/api/unit/applications/**", "/webhook/unit/**")
 						.permitAll().requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers("/api/plaid/**").hasAuthority("ROLE_Officer").anyRequest().authenticated())
 

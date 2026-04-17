@@ -52,13 +52,6 @@ public interface UserClubRepository extends JpaRepository<UserClub, UserClubId> 
 
     // 4. Count Active Members
     long countByClubIdAndStatus(Long clubId, String status);
-    
-    @Query("SELECT COUNT(uc) FROM UserClub uc WHERE uc.clubId = :clubId AND uc.status = :status AND uc.joinedAt >= :since")
-    long countByClubIdAndStatusAndJoinedAtAfter(
-        @Param("clubId") Long clubId, 
-        @Param("status") String status, 
-        @Param("since") java.time.Instant since
-    );
 
     // 5. Soft Delete (Deactivate) membership
     @Modifying

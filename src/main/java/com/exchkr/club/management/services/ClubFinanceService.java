@@ -1,6 +1,5 @@
 package com.exchkr.club.management.services;
 
-import com.exchkr.club.management.model.api.request.BudgetPatchRequest;
 import com.exchkr.club.management.model.api.request.BudgetSetupRequest;
 import com.exchkr.club.management.model.api.request.CreateInvoiceRequest;
 import com.exchkr.club.management.model.api.request.DueReminderRequest;
@@ -13,7 +12,6 @@ import com.exchkr.club.management.model.api.response.RecentActivityResponse;
 import com.exchkr.club.management.model.api.response.ReimbursementListResponse;
 import com.exchkr.club.management.model.dto.FinanceSummaryDTO;
 import com.exchkr.club.management.model.dto.MemberDuesDTO;
-import com.exchkr.club.management.model.entity.BudgetCategoryMaster;
 import com.exchkr.club.management.model.entity.ClubTransaction;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page; 
@@ -101,12 +99,8 @@ public interface ClubFinanceService {
      */
     List<MonthlySpendingResponse> getMonthlySpendingTrend(Long clubId);
     
-    void saveMasterCategories(Long clubId, List<String> categoryNames);
-
-    List<BudgetCategoryMaster> getBudgetCategoryMasterList(Long clubId);
     
     void saveBudget(Long clubId, BudgetSetupRequest request, Long userId);
-    void patchBudget(Long clubId, BudgetPatchRequest request, Long userId);
     BudgetSummaryResponse getBudgetSummary(Long clubId);
     
     

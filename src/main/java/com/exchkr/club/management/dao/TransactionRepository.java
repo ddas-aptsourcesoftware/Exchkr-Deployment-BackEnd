@@ -12,7 +12,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,14 +46,17 @@ public interface TransactionRepository extends JpaRepository<ClubTransaction, Lo
 	long countTransactionsByClub(@Param("clubId") Long clubId);
 
 	@Query(value = """
-			SELECT * FROM ecm_clubs_transactions
-			WHERE club_id = :clubId
-			  AND trans_date >= :fromDate
-			  AND trans_date < :toDatePlusOne
-			ORDER BY trans_date DESC
-			""", nativeQuery = true)
-	List<ClubTransaction> findTransactionsByDateRangeInclusive(@Param("clubId") Long clubId,
-			@Param("fromDate") Instant fromDate, @Param("toDatePlusOne") Instant toDatePlusOne);
+		    SELECT * FROM ecm_clubs_transactions 
+		    WHERE club_id = :clubId 
+		    AND trans_date >= :fromDate 
+		    AND trans_date <= :toDate 
+		    ORDER BY trans_date DESC
+		    """, nativeQuery = true)
+		List<ClubTransaction> findTransactionsByDateRange(
+		    @Param("clubId") Long clubId, 
+		    @Param("fromDate") java.time.Instant fromDate, 
+		    @Param("toDate") java.time.Instant toDate
+		);
 
 	Optional<ClubTransaction> findByStripeRefId(String stripeRefId);
 
@@ -64,23 +66,29 @@ public interface TransactionRepository extends JpaRepository<ClubTransaction, Lo
 
 	Optional<ClubTransaction> findByDueIdAndStripeRefId(Long dueId, String stripeRefId);
 
-	@Modifying
-	@Transactional
-	@Query(value = """
-			INSERT INTO ecm_clubs_transactions
-			(club_id, done_by_user_id, trans_date, description, category, type,
-			 amount, status, stripe_ref_id, paid_to_user_id, due_id,
-			 platform_fees, payment_gateway_service_charge)
-			VALUES
-			(:clubId, :userId, NOW(), :description, :category, 'Income',
-			 :amount, :paymentStatus, :stripePaymentIntentId, NULL, NULL,
-			 :platformFee, :stripeFee)
-			""", nativeQuery = true)
-	int saveDonationTransaction(@Param("userId") Long userId, @Param("clubId") Long clubId,
-			@Param("description") String description, @Param("category") String category,
-			@Param("amount") BigDecimal amount, @Param("stripePaymentIntentId") String stripePaymentIntentId,
-			@Param("paymentStatus") String paymentStatus, @Param("platformFee") BigDecimal platformFee,
-			@Param("stripeFee") BigDecimal stripeFee);
+    @Modifying
+    @Transactional
+    @Query(value = """
+    INSERT INTO ecm_clubs_transactions
+    (club_id, done_by_user_id, trans_date, description, category, type,
+     amount, status, stripe_ref_id, paid_to_user_id, due_id,
+     platform_fees, payment_gateway_service_charge)
+    VALUES
+    (:clubId, :userId, NOW(), :description, :category, 'Income',
+     :amount, :paymentStatus, :stripePaymentIntentId, NULL, NULL,
+     :platformFee, :stripeFee)
+    """, nativeQuery = true)
+    int saveDonationTransaction(
+            @Param("userId") Long userId,
+            @Param("clubId") Long clubId,
+            @Param("description") String description,
+            @Param("category") String category,
+            @Param("amount") BigDecimal amount,
+            @Param("stripePaymentIntentId") String stripePaymentIntentId,
+            @Param("paymentStatus") String paymentStatus,
+            @Param("platformFee") BigDecimal platformFee,
+            @Param("stripeFee") BigDecimal stripeFee
+    );
 
 	@Query(value = "SELECT trans_id, category, amount, status, trans_date, description, due_id "
 			+ "FROM ecm_clubs_transactions " + "WHERE club_id = :clubId "
@@ -94,11 +102,6 @@ public interface TransactionRepository extends JpaRepository<ClubTransaction, Lo
 			WHERE club_id = :clubId AND status = 'Completed' AND type = :type
 			""", nativeQuery = true)
 	BigDecimal sumAmountByClubAndType(@Param("clubId") Long clubId, @Param("type") String type);
-
-	@Query("SELECT SUM(t.amount) FROM ClubTransaction t " + "WHERE t.clubId = :clubId " + "AND t.type = :type "
-			+ "AND t.status = 'Completed' " + "AND t.transDate BETWEEN :start AND :end")
-	BigDecimal sumAmountByClubAndTypeAndDate(@Param("clubId") Long clubId, @Param("type") String type,
-			@Param("start") Instant start, @Param("end") Instant end);
 
 	@Query(value = """
 			SELECT
@@ -119,105 +122,91 @@ public interface TransactionRepository extends JpaRepository<ClubTransaction, Lo
 			""", nativeQuery = true)
 	List<Object[]> getPendingActions(@Param("clubId") Long clubId);
 
-	@Query(value = """
-			SELECT
-			    t.trans_id,
-			    t.trans_date,
-			    t.description,
-			    t.category,
-			    t.type,
-			    t.amount,
-			    t.status,
+    @Query(value = """
+        SELECT
+            t.trans_id,
+            t.trans_date,
+            t.description,
+            t.category,
+            t.type,
+            t.amount,
+            t.status,
 
-			    t.done_by_user_id,
+            t.done_by_user_id,
 
-			    CASE
-			        WHEN t.category = 'Public Donation'
-			            THEN d.donator_name
-			        ELSE du.full_name
-			    END AS done_by_user_name,
+            CASE
+                WHEN t.category = 'Public Donation'
+                    THEN d.donator_name
+                ELSE du.full_name
+            END AS done_by_user_name,
 
-			    CASE
-			        WHEN t.type = 'Expense' THEN t.paid_to_user_id
-			        ELSE NULL
-			    END AS paid_to_user_id,
+            CASE
+                WHEN t.type = 'Expense' THEN t.paid_to_user_id
+                ELSE NULL
+            END AS paid_to_user_id,
 
-			    CASE
-			        WHEN t.type = 'Expense' THEN pu.full_name
-			        ELSE NULL
-			    END AS paid_to_user_name
+            CASE
+                WHEN t.type = 'Expense' THEN pu.full_name
+                ELSE NULL
+            END AS paid_to_user_name
 
-			FROM public.ecm_clubs_transactions t
+        FROM public.ecm_clubs_transactions t
 
-			LEFT JOIN public.ecm_users du
-			    ON du.user_id = t.done_by_user_id
+        LEFT JOIN public.ecm_users du
+            ON du.user_id = t.done_by_user_id
 
-			LEFT JOIN public.ecm_users pu
-			    ON pu.user_id = t.paid_to_user_id
-			   AND t.type = 'Expense'
+        LEFT JOIN public.ecm_users pu
+            ON pu.user_id = t.paid_to_user_id
+           AND t.type = 'Expense'
 
-			LEFT JOIN public.ecm_clubs_donations d
-			    ON d.donation_id = t.public_donation_id
-			   AND t.category = 'Public Donation'
+        LEFT JOIN public.ecm_clubs_donations d
+            ON d.donation_id = t.public_donation_id
+           AND t.category = 'Public Donation'
 
-			WHERE t.club_id = :clubId
-			ORDER BY t.trans_date DESC
-			LIMIT 6
-			""", nativeQuery = true)
-	List<Object[]> getRecentActivity(@Param("clubId") Long clubId);
+        WHERE t.club_id = :clubId
+        ORDER BY t.trans_date DESC
+        LIMIT 6
+        """, nativeQuery = true)
+    List<Object[]> getRecentActivity(@Param("clubId") Long clubId);
 
-	@Query(value = """
-			SELECT
-			    combined.category_name AS name,
-			    SUM(combined.amount) AS value
-			FROM (
-			    SELECT t.category AS category_name, t.amount AS amount
-			    FROM ecm_clubs_transactions t
-			    WHERE t.club_id = :clubId
-			      AND t.type = 'Expense'
-			      AND t.status = 'Completed'
-			      AND t.stripe_ref_id IS NULL
 
-			    UNION ALL
 
-			    SELECT r.category AS category_name, t.amount AS amount
-			    FROM ecm_reimbursement_requests r
-			    JOIN ecm_clubs_transactions t ON r.stripe_ref_id = t.stripe_ref_id
-			    WHERE r.club_id = :clubId
-			      AND t.status = 'Completed'
-			      AND t.type = 'Expense'
-			) combined
-			GROUP BY combined.category_name
-			""", nativeQuery = true)
-	List<Map<String, Object>> getSpendingByCategoryRaw(@Param("clubId") Long clubId);
-
-	@Query(value = """
-			SELECT
-			    TO_CHAR(trans_date, 'Mon') AS month,
-			    SUM(amount) AS amount,
-			    DATE_TRUNC('month', trans_date) AS month_start
-			FROM ecm_clubs_transactions
-			WHERE club_id = :clubId
-			  AND status = 'Completed'
-			  AND type = 'Expense'
-			  AND trans_date >= CURRENT_DATE - INTERVAL '6 months'
-			GROUP BY month, month_start
-			ORDER BY month_start ASC
-			""", nativeQuery = true)
-	List<Map<String, Object>> getMonthlySpendingRaw(@Param("clubId") Long clubId);
-
-	@Query("SELECT SUM(t.amount) FROM ClubTransaction t " + "WHERE t.clubId = :clubId " + "AND t.category = :category "
-			+ "AND t.type = 'Expense' " + "AND t.status = 'Completed' " + "AND t.stripeRefId IS NULL")
-	BigDecimal sumDirectExpensesOnly(@Param("clubId") Long clubId, @Param("category") String category);
-
-	@Query(value = """
-			SELECT CAST(COALESCE(SUM(t.amount), 0) AS NUMERIC)
-			FROM ecm_clubs_transactions t
-			JOIN ecm_reimbursement_requests r ON t.stripe_ref_id = r.stripe_ref_id
-			WHERE r.club_id = :clubId
-			  AND r.category = :category
-			  AND t.status = 'Completed'
-			""", nativeQuery = true)
-	BigDecimal sumValidatedReimbursementExpenses(@Param("clubId") Long clubId, @Param("category") String category);
+    @Query(value = """
+	    	    SELECT 
+	    	        r.category AS name,
+	    	        SUM(r.amount_usd) AS value,
+	    	        CASE 
+	    	            WHEN r.category = 'Event Supplies' THEN '#122B5B'
+	    	            WHEN r.category = 'Food & Beverages' THEN '#BAE6FD'
+	    	            WHEN r.category = 'Equipment' THEN '#D97706'
+	    	            WHEN r.category = 'Transportation' THEN '#E0E7FF'
+	    	            WHEN r.category = 'Marketing Materials' THEN '#6366F1'
+	    	            ELSE '#F3F4F6'
+	    	        END AS color
+	    	    FROM ecm_reimbursement_requests r
+	    	    JOIN ecm_clubs_transactions t ON r.stripe_ref_id = t.stripe_ref_id
+	    	    WHERE r.club_id = :clubId 
+	    	      AND r.status = 'PAID'
+	    	      AND t.status = 'Completed'
+	    	      AND r.category IN ('Event Supplies', 'Food & Beverages', 'Equipment', 'Transportation', 'Marketing Materials', 'Other')
+	    	    GROUP BY r.category
+	    	    """, nativeQuery = true)
+	    	List<Map<String, Object>> getSpendingByCategoryRaw(@Param("clubId") Long clubId);
+	 
+	 
+	 @Query(value = """
+			    SELECT 
+			        TO_CHAR(trans_date, 'Mon') AS month,
+			        SUM(amount) AS amount,
+			        DATE_TRUNC('month', trans_date) AS month_start
+			    FROM ecm_clubs_transactions
+			    WHERE club_id = :clubId 
+			      AND status = 'Completed' 
+			      AND type = 'Expense'
+			      AND trans_date >= CURRENT_DATE - INTERVAL '6 months'
+			    GROUP BY month, month_start
+			    ORDER BY month_start ASC
+			    """, nativeQuery = true)
+			List<Map<String, Object>> getMonthlySpendingRaw(@Param("clubId") Long clubId);
 
 }

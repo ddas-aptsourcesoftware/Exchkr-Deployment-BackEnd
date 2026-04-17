@@ -15,15 +15,7 @@ import com.exchkr.club.management.model.entity.ClubBudget;
 public interface ClubBudgetRepository extends JpaRepository<ClubBudget, Long> {
 	Optional<ClubBudget> findByClubIdAndFiscalYearAndActiveInd(Long clubId, Integer fiscalYear, Integer activeInd);
 	
-	@Query("SELECT COUNT(cb) > 0 FROM ClubBudget cb " +
-	           "WHERE cb.clubId = :clubId " +
-	           "AND cb.fiscalYear = :fiscalYear " +
-	           "AND cb.activeInd = :activeInd")
-	    boolean existsByClubIdAndFiscalYearAndActiveInd(
-	        @Param("clubId") Long clubId, 
-	        @Param("fiscalYear") Integer fiscalYear, 
-	        @Param("activeInd") Integer activeInd
-	    );
+	boolean existsByClubIdAndFiscalYearAndActiveInd(Long clubId, Integer fiscalYear, Integer activeInd);
 	
 	/**
      * Updates the total_spent for a specific category within the active budget.

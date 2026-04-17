@@ -1,21 +1,16 @@
 package com.exchkr.club.management.model.api.request;
 
-import java.math.BigDecimal;
 import java.util.List;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
 
 public class BudgetSetupRequest {
-	@NotNull(message = "Total budget is required")
-	private BigDecimal totalBudget;
-
+	private Long totalBudget;
 	private List<CategoryAllocationDTO> categories;
 
-	public BigDecimal getTotalBudget() {
+	public Long getTotalBudget() {
 		return totalBudget;
 	}
 
-	public void setTotalBudget(BigDecimal totalBudget) {
+	public void setTotalBudget(Long totalBudget) {
 		this.totalBudget = totalBudget;
 	}
 
@@ -28,21 +23,9 @@ public class BudgetSetupRequest {
 	}
 
 	public static class CategoryAllocationDTO {
-		@NotNull(message = "Category ID is required")
-		private Long categoryId;
 		private String categoryName;
-
-		@NotNull(message = "Budgeted amount is required")
-		@PositiveOrZero(message = "Budgeted amount cannot be negative")
-		private BigDecimal totalBudgeted;
-
-		public Long getCategoryId() {
-			return categoryId;
-		}
-
-		public void setCategoryId(Long categoryId) {
-			this.categoryId = categoryId;
-		}
+		private Long totalBudgeted;
+		private Long totalSpent;
 
 		public String getCategoryName() {
 			return categoryName;
@@ -52,12 +35,21 @@ public class BudgetSetupRequest {
 			this.categoryName = categoryName;
 		}
 
-		public BigDecimal getTotalBudgeted() {
+		public Long getTotalBudgeted() {
 			return totalBudgeted;
 		}
 
-		public void setTotalBudgeted(BigDecimal totalBudgeted) {
+		public void setTotalBudgeted(Long totalBudgeted) {
 			this.totalBudgeted = totalBudgeted;
 		}
+
+		public Long getTotalSpent() {
+			return totalSpent;
+		}
+
+		public void setTotalSpent(Long totalSpent) {
+			this.totalSpent = totalSpent;
+		}
+
 	}
 }

@@ -3,7 +3,6 @@ package com.exchkr.club.management.controller;
 import com.exchkr.club.management.model.api.request.ReimbursementReceiptDownloadRequest;
 import com.exchkr.club.management.model.api.request.TransactionRequest;
 import com.exchkr.club.management.model.api.request.MemberReimbursementRequest;
-import com.exchkr.club.management.model.api.response.ClubCategoriesResponse;
 import com.exchkr.club.management.model.api.response.MemberDuesResponse;
 import com.exchkr.club.management.model.api.response.MembersTransactionsResponse;
 import com.exchkr.club.management.model.api.response.RecentDuesResponse;
@@ -139,18 +138,6 @@ public class MemberFinanceController {
                 user.getClubId(),
                 request.getDueId()
         );
-    }
-
-    @GetMapping("/club-budget-categories")
-    public ResponseEntity<ClubCategoriesResponse> getClubBudgetCategories(
-            @AuthenticationPrincipal CustomUserDetails user) {
-
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        // Delegate to service to fetch transactions
-        return memberFinanceService.getClubBudgetCategories(user.getClubId());
     }
 
 }

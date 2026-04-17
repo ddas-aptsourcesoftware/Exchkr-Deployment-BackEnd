@@ -9,7 +9,6 @@ import com.exchkr.club.management.model.api.response.RecentActivityResponse;
 import com.exchkr.club.management.model.api.response.ReimbursementListResponse;
 import com.exchkr.club.management.model.dto.FinanceSummaryDTO;
 import com.exchkr.club.management.model.dto.MemberDuesDTO;
-import com.exchkr.club.management.model.entity.BudgetCategoryMaster;
 import com.exchkr.club.management.model.entity.ClubTransaction;
 import com.exchkr.club.management.security.CustomUserDetails; 
 import com.exchkr.club.management.services.ClubFinanceService;
@@ -281,36 +280,6 @@ public class ClubFinanceController {
     
     
     /**
-     * Creates new master categories for a club.
-     * Supports single or multiple categories (comma-separated list sent from UI).
-     */
-    @PostMapping("/budget-categories")
-    public ResponseEntity<Void> createCategories(
-            @RequestBody List<String> categories, 
-            Authentication authentication) {
-        
-        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
-        
-        clubFinanceService.saveMasterCategories(user.getClubId(), categories);
-        
-        return ResponseEntity.status(HttpStatus.CREATED).build();
-    }
-
-    /**
-     * Retrieves the master category list for the club to populate UI dropdowns.
-     */
-    @GetMapping("/budget-categories")
-    public ResponseEntity<List<BudgetCategoryMaster>> getMasterCategories(Authentication authentication) {
-        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
-        
-        // This returns the full list of category names and their IDs for the specific club
-        List<BudgetCategoryMaster> categories = clubFinanceService.getBudgetCategoryMasterList(user.getClubId());
-        
-        return ResponseEntity.ok(categories);
-    }
-    
-    
-    /**
      * Set up the annual budget and category allocations for the club.
      */
     @PostMapping("/budget-setup")
@@ -324,21 +293,6 @@ public class ClubFinanceController {
         clubFinanceService.saveBudget(user.getClubId(), request, user.getUserId());
         
         return ResponseEntity.status(HttpStatus.CREATED).build();
-    }
-    
-    
-    /**
-     * Update the annual budget and category allocations for the club.
-     */
-    @PatchMapping("/budget")
-    public ResponseEntity<Void> updateBudget(
-            @RequestBody BudgetPatchRequest request,
-            Authentication authentication) {
-        
-        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
-        clubFinanceService.patchBudget(user.getClubId(), request, user.getUserId());
-        
-        return ResponseEntity.ok().build();
     }
 
     /**

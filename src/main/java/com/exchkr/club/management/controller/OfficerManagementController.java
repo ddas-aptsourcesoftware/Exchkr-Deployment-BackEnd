@@ -2,7 +2,6 @@ package com.exchkr.club.management.controller;
 
 import com.exchkr.club.management.model.api.request.MemberCsvRequest;
 import com.exchkr.club.management.model.api.request.MemberRequest;
-import com.exchkr.club.management.model.api.response.MemberCountResponse;
 import com.exchkr.club.management.model.dto.UserDTO;
 import com.exchkr.club.management.security.CustomUserDetails;
 import com.exchkr.club.management.services.OfficerManagementService;
@@ -53,11 +52,11 @@ public class OfficerManagementController {
 
     @GetMapping("/count")
     @PreAuthorize("hasAuthority('ROLE_Officer')")
-    public ResponseEntity<MemberCountResponse> getMemberCount(Authentication authentication) {
+    public ResponseEntity<Long> getMemberCount(Authentication authentication) {
         CustomUserDetails user = getPrincipal(authentication);
-        return ResponseEntity.ok(officerManagementService.getMemberCounts(user.getClubId()));
+        return ResponseEntity.ok(officerManagementService.getMemberCount(user.getClubId()));
     }
-    
+
     @DeleteMapping("/{memberId}")
     @PreAuthorize("hasAuthority('ROLE_Officer')")
     public ResponseEntity<Void> deleteMember(

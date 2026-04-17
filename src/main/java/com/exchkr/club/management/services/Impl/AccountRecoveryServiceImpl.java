@@ -23,9 +23,9 @@ public class AccountRecoveryServiceImpl implements AccountRecoveryService {
     }
 
     @Override
-    public void resetPassword(AccountRecoveryRequest request) {
+    public void resetPassword(AccountRecoveryRequest request, String authenticatedEmail) {
         // 1. Fetch User (Verification)
-        User user = userRepository.findUserByEmail(request.getEmail())
+        User user = userRepository.findUserByEmail(authenticatedEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found."));
 
         // 2. Validate Current Password

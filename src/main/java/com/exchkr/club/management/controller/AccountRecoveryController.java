@@ -19,11 +19,14 @@ public class AccountRecoveryController {
 
     @PostMapping("/reset")
     public ResponseEntity<String> resetPassword(
-            @RequestBody AccountRecoveryRequest request) { 
+            @RequestBody AccountRecoveryRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) { // Use CustomUserDetails
 
+        // Extract the authenticated user's email
+        String authenticatedEmail = userDetails.getUsername();
 
         // Delegate to service
-        accountRecoveryService.resetPassword(request);
+        accountRecoveryService.resetPassword(request, authenticatedEmail);
 
         return ResponseEntity.ok("Password updated successfully.");
     }

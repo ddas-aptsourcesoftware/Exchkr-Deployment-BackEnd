@@ -1,7 +1,6 @@
 package com.exchkr.club.management.services;
 
 import com.exchkr.club.management.model.api.request.MemberRequest;
-import com.exchkr.club.management.model.api.response.MemberCountResponse;
 import com.exchkr.club.management.model.dto.UserDTO;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,7 +14,7 @@ public interface OfficerManagementService {
 
     List<UserDTO> getClubMembers(Long clubId, String filter);
 
-    MemberCountResponse getMemberCounts(Long clubId);
-    
+    long getMemberCount(Long clubId);
+
     void addMembersCSV(MultipartFile membersCsvFile, Long userId, Long clubId);
 }

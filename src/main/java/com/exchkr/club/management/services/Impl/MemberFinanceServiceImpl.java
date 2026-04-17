@@ -4,7 +4,6 @@ import com.exchkr.club.management.dao.MemberDuesRepository;
 import com.exchkr.club.management.dao.ReimbursementRepository;
 import com.exchkr.club.management.dao.TransactionRepository;
 import com.exchkr.club.management.model.api.request.TransactionRequest;
-import com.exchkr.club.management.model.api.response.ClubCategoriesResponse;
 import com.exchkr.club.management.model.api.response.MembersTransactionsResponse;
 import com.exchkr.club.management.model.api.response.MemberDuesResponse;
 import com.exchkr.club.management.model.api.response.RecentDuesResponse;
@@ -196,7 +195,7 @@ public class MemberFinanceServiceImpl implements MemberFinanceService {
         Path filePath = Paths.get(basePath, systemFileName);
 
         try {
-            receiptImageFile.transferTo(filePath);
+            Files.copy(receiptImageFile.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save file");
         }
@@ -424,35 +423,6 @@ public class MemberFinanceServiceImpl implements MemberFinanceService {
                         "attachment; filename=\"" + invoiceFileName + "\""
                 )
                 .body(resource);
-    }
-
-    @Override
-    public ResponseEntity<ClubCategoriesResponse> getClubBudgetCategories(Long clubId) {
-        try {
-
-            List<Object[]> rows = reimbursementRepository.getClubBudgetCategories(clubId);
-            List<ClubCategoriesResponse.Category> categories = new ArrayList<>();
-
-            if (rows != null && !rows.isEmpty()) {
-                for (Object[] row : rows) {
-
-                    ClubCategoriesResponse.Category category =
-                            new ClubCategoriesResponse.Category(
-                                    ((Number) row[0]).longValue(), // category_id
-                                    (String) row[1]                // category_name
-                            );
-
-                    categories.add(category);
-                }
-            }
-
-            ClubCategoriesResponse response = new ClubCategoriesResponse(categories);
-
-            return ResponseEntity.ok(response);
-
-        } catch (Exception ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
     }
 
 

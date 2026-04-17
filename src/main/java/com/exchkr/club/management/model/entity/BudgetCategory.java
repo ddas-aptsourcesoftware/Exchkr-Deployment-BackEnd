@@ -17,10 +17,7 @@ public class BudgetCategory {
 	@JoinColumn(name = "budget_id")
 	private ClubBudget budget;
 
-	@ManyToOne(fetch = FetchType.EAGER)
-	@JoinColumn(name = "category_id", nullable = false)
-	private BudgetCategoryMaster categoryMaster;
-
+	private String categoryName;
 	private BigDecimal totalBudgeted;
 	private BigDecimal totalSpent = BigDecimal.ZERO;
 
@@ -40,12 +37,12 @@ public class BudgetCategory {
 		this.budget = budget;
 	}
 
-	public BudgetCategoryMaster getCategoryMaster() {
-		return categoryMaster;
+	public String getCategoryName() {
+		return categoryName;
 	}
 
-	public void setCategoryMaster(BudgetCategoryMaster categoryMaster) {
-		this.categoryMaster = categoryMaster;
+	public void setCategoryName(String categoryName) {
+		this.categoryName = categoryName;
 	}
 
 	public BigDecimal getTotalBudgeted() {

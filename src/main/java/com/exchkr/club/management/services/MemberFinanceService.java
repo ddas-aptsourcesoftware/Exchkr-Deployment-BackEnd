@@ -4,7 +4,6 @@ import com.exchkr.club.management.model.api.request.TransactionRequest;
 import java.math.BigDecimal;
 import java.util.List;
 
-import com.exchkr.club.management.model.api.response.ClubCategoriesResponse;
 import com.exchkr.club.management.model.api.response.MemberDuesResponse;
 import com.exchkr.club.management.model.api.response.MembersTransactionsResponse;
 import com.exchkr.club.management.model.api.response.RecentDuesResponse;
@@ -37,6 +36,4 @@ public interface MemberFinanceService {
     ResponseEntity<List<RecentDuesResponse>> getRecentMemberDue(Long userId, Long clubId);
 
     ResponseEntity<Resource> dueReceiptDownload(Long userId, Long clubId, Long dueId);
-
-    ResponseEntity<ClubCategoriesResponse> getClubBudgetCategories(Long clubId);
 }
