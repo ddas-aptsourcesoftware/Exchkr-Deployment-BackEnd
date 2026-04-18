@@ -8,7 +8,7 @@ import com.stripe.Stripe;
 @Configuration
 public class StripeConfig {
 
-    @Value("${STRIPE_API_SECRET_KEY}")
+    @Value("${stripe.api.secretKey}")
     private String stripeSecretKey;
 
     @PostConstruct
