@@ -6,7 +6,7 @@ import com.exchkr.club.management.dao.UserWithClubProjection;
 import com.exchkr.club.management.model.api.request.AuthRequest;
 import com.exchkr.club.management.model.entity.User;
 import com.exchkr.club.management.model.api.response.LoginResponse;
-import com.exchkr.club.management.model.dto.UserDTO; 
+import com.exchkr.club.management.model.dto.UserDTO;
 import com.exchkr.club.management.security.JwtUtil;
 import com.exchkr.club.management.services.AuthenticationService;
 import jakarta.servlet.http.Cookie;
@@ -14,11 +14,14 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 
@@ -27,10 +30,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationServiceImpl.class);
 
+    @Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
+
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
-    
+
     private final boolean cookieSecure;
 
     public AuthenticationServiceImpl(UserRepository userRepository, JwtUtil jwtUtil, PasswordEncoder passwordEncoder, @Value("${app.security.cookie-secure}") boolean cookieSecure) {
@@ -41,17 +47,21 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     private void setTokenCookie(HttpServletResponse response, String name, String token, long maxAgeMs) {
-        int maxAgeSeconds = (int) (maxAgeMs / 1000); 
 
-        Cookie cookie = new Cookie(name, token);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");      
-        cookie.setMaxAge(maxAgeSeconds); 
+        long maxAgeSeconds = maxAgeMs / 1000;
 
-        cookie.setSecure(this.cookieSecure);  
+        String frontendHost = URI.create(frontendBaseUrl).getHost();
 
-        response.addCookie(cookie);
-        logger.info("Set cookie: {} (Secure: false) for local HTTP.", name);
+        ResponseCookie cookie = ResponseCookie.from(name, token)
+                .httpOnly(true)
+                .path("/")
+                .maxAge(maxAgeSeconds)
+                .secure(true)
+                .sameSite("None")
+                .domain(frontendHost)
+                .build();
+
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
     @Override
@@ -60,7 +70,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
         // Instead of generating a token, find all associated clubs
@@ -73,7 +83,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // Return a response that tells the Frontend: "Pick one of these clubs"
         return new LoginResponse("Please select a club", memberships, user.getUserId());
     }
-    
+
     @Override
     public LoginResponse selectClub(Long userId, Long clubId, HttpServletResponse response) {
         // 1. Fetch user
@@ -82,7 +92,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         // 2. Fetch specific membership to get the Role and Club Name
         List<UserClubMembershipProjection> memberships = userRepository.findAllMembershipsByUserId(userId);
-        
+
         UserClubMembershipProjection selected = memberships.stream()
                 .filter(m -> m.getClubId().equals(clubId))
                 .findFirst()
@@ -104,7 +114,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         return new LoginResponse("Login successful for " + selected.getClubName(), userDTO);
     }
-    
+
 
     @Override
     public LoginResponse refreshToken(String oldRefreshToken, HttpServletResponse response) {
@@ -119,15 +129,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // IMPORTANT: Since a refresh token doesn't know which club was active, 
         // we either need the frontend to pass the active clubId, 
         // or we default to the first one (not ideal), or we extract it from the expired access token.
-        
+
         // For now, let's assume we fetch the "primary" or first active membership
         List<UserClubMembershipProjection> memberships = userRepository.findAllMembershipsByUserId(user.getUserId());
         if (memberships.isEmpty()) {
-             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No active memberships found.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No active memberships found.");
         }
-        
+
         // Logic: Pick the first membership or implement a "Last Used Club" logic in DB
-        UserClubMembershipProjection defaultMembership = memberships.get(0); 
+        UserClubMembershipProjection defaultMembership = memberships.get(0);
         List<String> roles = Collections.singletonList(defaultMembership.getRoleName());
 
         String newAccessToken = jwtUtil.generateAccessToken(user.getEmail(), user.getUserId(), defaultMembership.getClubId(), roles);
@@ -137,8 +147,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         setTokenCookie(response, "refreshToken", newRefreshToken, JwtUtil.REFRESH_EXPIRATION_MS);
 
         return new LoginResponse(
-            "Token refreshed successfully",
-            UserDTO.fromUser(user, roles, defaultMembership.getClubName(), defaultMembership.getClubId(), defaultMembership.getJoinedAt())
+                "Token refreshed successfully",
+                UserDTO.fromUser(user, roles, defaultMembership.getClubName(), defaultMembership.getClubId(), defaultMembership.getJoinedAt())
         );
     }
 }
