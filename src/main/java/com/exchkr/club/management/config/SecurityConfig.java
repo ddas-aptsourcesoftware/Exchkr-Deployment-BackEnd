@@ -108,7 +108,7 @@ public class SecurityConfig {
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000", frontendBaseUrl));
+        config.setAllowedOrigins(List.of(frontendBaseUrl));
 		config.setAllowCredentials(true);
 		config.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN", "Authorization"));
 		config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));

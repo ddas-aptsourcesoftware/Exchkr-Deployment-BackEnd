@@ -29,35 +29,52 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationServiceImpl.class);
 
+    @Value("${app.security.cookie-secure}")
+    private boolean cookieSecure;
+
+    @Value("${app.frontend.cookie-domain:}")
+    private String cookieDomain;
+
+
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
 
-    private final boolean cookieSecure;
 
-    public AuthenticationServiceImpl(UserRepository userRepository, JwtUtil jwtUtil, PasswordEncoder passwordEncoder, @Value("${app.security.cookie-secure}") boolean cookieSecure) {
+    public AuthenticationServiceImpl(UserRepository userRepository, JwtUtil jwtUtil, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
-        this.cookieSecure = cookieSecure;
     }
 
-    private void setTokenCookie(HttpServletResponse response,
-                                String name,
-                                String token,
-                                long maxAgeMs) {
+    private void setTokenCookie(HttpServletResponse response, String name, String token, long maxAgeMs) {
 
-        long maxAgeSeconds = maxAgeMs / 1000;
+        int maxAgeSeconds = (int) (maxAgeMs / 1000);
 
-        ResponseCookie cookie = ResponseCookie.from(name, token)
+        // LOCALHOST FLOW
+        if (!cookieSecure) {
+            Cookie cookie = new Cookie(name, token);
+            cookie.setHttpOnly(true);
+            cookie.setPath("/");
+            cookie.setMaxAge(maxAgeSeconds);
+            cookie.setSecure(false);
+            response.addCookie(cookie);
+            return;
+        }
+
+        // PRODUCTION FLOW
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, token)
                 .httpOnly(true)
+                .secure(true)
                 .path("/")
                 .maxAge(maxAgeSeconds)
-                .secure(true)
-                .sameSite("None")   // ⭐ THE IMPORTANT PART
-                .build();
+                .sameSite("None");
 
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        if (cookieDomain != null && !cookieDomain.isBlank()) {
+            builder.domain(cookieDomain);
+        }
+
+        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
     }
 
     @Override
