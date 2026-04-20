@@ -21,7 +21,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 
@@ -29,9 +28,6 @@ import java.util.List;
 public class AuthenticationServiceImpl implements AuthenticationService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationServiceImpl.class);
-
-    @Value("${app.frontend.base-url}")
-    private String frontendBaseUrl;
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
@@ -46,19 +42,19 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         this.cookieSecure = cookieSecure;
     }
 
-    private void setTokenCookie(HttpServletResponse response, String name, String token, long maxAgeMs) {
+    private void setTokenCookie(HttpServletResponse response,
+                                String name,
+                                String token,
+                                long maxAgeMs) {
 
         long maxAgeSeconds = maxAgeMs / 1000;
-
-        String frontendHost = URI.create(frontendBaseUrl).getHost();
 
         ResponseCookie cookie = ResponseCookie.from(name, token)
                 .httpOnly(true)
                 .path("/")
                 .maxAge(maxAgeSeconds)
                 .secure(true)
-                .sameSite("None")
-                .domain(frontendHost)
+                .sameSite("None")   // ⭐ THE IMPORTANT PART
                 .build();
 
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
@@ -70,7 +66,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
         // Instead of generating a token, find all associated clubs
@@ -133,7 +129,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // For now, let's assume we fetch the "primary" or first active membership
         List<UserClubMembershipProjection> memberships = userRepository.findAllMembershipsByUserId(user.getUserId());
         if (memberships.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No active memberships found.");
+             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No active memberships found.");
         }
 
         // Logic: Pick the first membership or implement a "Last Used Club" logic in DB
@@ -147,8 +143,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         setTokenCookie(response, "refreshToken", newRefreshToken, JwtUtil.REFRESH_EXPIRATION_MS);
 
         return new LoginResponse(
-                "Token refreshed successfully",
-                UserDTO.fromUser(user, roles, defaultMembership.getClubName(), defaultMembership.getClubId(), defaultMembership.getJoinedAt())
+            "Token refreshed successfully",
+            UserDTO.fromUser(user, roles, defaultMembership.getClubName(), defaultMembership.getClubId(), defaultMembership.getJoinedAt())
         );
     }
 }
