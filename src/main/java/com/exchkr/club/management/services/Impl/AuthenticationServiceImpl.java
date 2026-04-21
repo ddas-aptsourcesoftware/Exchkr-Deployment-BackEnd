@@ -49,32 +49,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     private void setTokenCookie(HttpServletResponse response, String name, String token, long maxAgeMs) {
 
-        int maxAgeSeconds = (int) (maxAgeMs / 1000);
-
-        // LOCALHOST FLOW
-        if (!cookieSecure) {
-            Cookie cookie = new Cookie(name, token);
-            cookie.setHttpOnly(true);
-            cookie.setPath("/");
-            cookie.setMaxAge(maxAgeSeconds);
-            cookie.setSecure(false);
-            response.addCookie(cookie);
-            return;
-        }
-
-        // PRODUCTION FLOW
-        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, token)
+        ResponseCookie cookie = ResponseCookie.from(name, token)
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .path("/")
-                .maxAge(maxAgeSeconds)
-                .sameSite("None");
+                .maxAge(maxAgeMs / 1000)
+                .sameSite("None")
+                .build();
 
-        if (cookieDomain != null && !cookieDomain.isBlank()) {
-            builder.domain(cookieDomain);
-        }
-
-        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
     @Override
